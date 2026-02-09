@@ -27,25 +27,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout (attempt 1)
-        id: checkout1
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-        continue-on-error: true
-        timeout-minutes: 5
-      - name: Checkout (attempt 2)
-        if: steps.checkout1.outcome == 'failure'
-        id: checkout2
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-        continue-on-error: true
-        timeout-minutes: 5
-      - name: Checkout (attempt 3)
-        if: steps.checkout2.outcome == 'failure'
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -53,7 +35,8 @@ jobs:
           # submodules: true
           # If using the 'assets' git submodule from Chirpy Starter, uncomment above
           # (See: https://github.com/cotes2020/chirpy-starter/tree/main/assets)
-        timeout-minutes: 5
+        retries: 3
+        retry-on-error: true
 
       - name: Setup Pages
         id: pages
