@@ -4,6 +4,7 @@ date: 2026-02-13 14:10:00 +0800
 categories: [Unity, Graphics]
 tags: [gpu-instancing, drawmeshinstanced, srp-batcher]
 description: 探究 Unity GPU Instancing 下单批最多能绘制多少个实例，以及常量缓冲区、矩阵与 Per-Instance 属性对批次上限的影响。
+media_subpath: /assets/img/2026-02-13-DrawMeshInstanced/
 render_with_liquid: false
 ---
 
@@ -65,9 +66,9 @@ fixed4 frag(v2f i) : SV_Target
 }
 ```
 
-## API 与批次上限
+## API说明
 
-该 API 的单批实例数存在上限。脚本中通过 MaterialPropertyBlock 的 `Set***Array` 设置 per-instance 属性，并调用 `Graphics.DrawMeshInstanced`，将单次绘制数量限制在 **1023** 以内。
+Unity官方文档说明该 API 的单批实例数存在上限。脚本中通过 MaterialPropertyBlock 的 `Set***Array` 设置 per-instance 属性，并调用 `Graphics.DrawMeshInstanced`，将单次绘制数量限制在 **1023** 以内。
 
 > 单批最多 1023 个实例的限制来自常量缓冲区（Constant Buffer）大小：多数设备上限为 64KB（65536 字节）。Unity 的 `ObjectToWorld` 矩阵占 64B，因此理论最大数量为 65536 / 64 − 1 = **1023**。
 {: .prompt-info }
@@ -76,7 +77,13 @@ fixed4 frag(v2f i) : SV_Target
 
 ## 初次实验结果
 
+![CBuffer中的变量](CbufferInputs0.png){: w="700" h="400" }
+_图：CBuffer中的变量_
+
 在本例中，`Props` 里声明了较多 per-instance 属性，总大小超过了 128B，因此单批实际只能绘制 **371** 个实例，低于 511。
+
+![初次实验：单批 371 个实例](371.png){: w="700" h="400" }
+_图：初次实验绘制结果（单批 371 个实例）_
 
 ## 优化：压缩 Per-Instance 属性
 
@@ -105,7 +112,13 @@ cbuffer UnityInstancing_Props {
 
 在结构体内，HLSL 会按 **std140** 规则打包：连续标量可打包到同一 16 字节对齐单元。因此将 `half4` 等四分量属性靠前放、零散 `half`/`float` 靠后放，有利于自动打包，减少浪费。
 
+![优化 Props 布局](CbufferInputs1.png){: w="700" h="400" }
+_图：优化 Props 布局_
+
 按上述方式调整属性顺序后，单批可绘制实例数提升到 **408** 个。
+
+![优化 Props 布局：单批 408 个实例](408.png){: w="700" h="400" }
+_图：单批 408 个实例_
 
 ## 验证：仅矩阵时的上限
 
@@ -113,19 +126,27 @@ cbuffer UnityInstancing_Props {
 
 在 `Graphics.RenderMeshInstanced` 文档中提到，可通过 `#pragma instancing_options assumeuniformscaling` 从实例数据中**去掉 WorldToObject 矩阵**。
 
-加上该 pragma 后，单批可绘制 **584** 个。仍未到 1023，说明顶点变换路径中仍在使用 `WorldToObject`。将 Shader 里对 `WorldToObject` 的引用注释掉后，单批终于达到 **1023** 个。
+加上该 pragma 后，单批可绘制 **584** 个。
+
+![仅矩阵 + assumeuniformscaling：单批 584 个实例](584.png){: w="700" h="400" }
+_图：单批 584 个实例_
+
+仍未到 1023，说明顶点变换路径中仍在使用 `WorldToObject`。将 Shader 里对 `WorldToObject` 的引用注释掉后，单批终于达到 **1023** 个。
+
+![仅矩阵、去掉 WorldToObject：单批 1023 个实例](1023.png){: w="700" h="400" }
+_图：单批 1023 个实例_
 
 > 584 的成因尚未完全确定。粗略估算：65536 / 584 ≈ 112 字节/实例；112 = 64 + 48，可能与「少传了一部分矩阵行」或其它隐式 per-instance 数据有关，留作后续排查。
 {: .prompt-warning }
 
 ## 小结
 
-| 情况 | 单批实例数 |
-|------|------------|
-| 默认（ObjectToWorld + WorldToObject + 多属性 Props） | 371 |
-| 优化 Props 布局后 | 408 |
-| 仅矩阵 + `assumeuniformscaling`，仍用 WorldToObject | 584 |
-| 仅矩阵 + 去掉 WorldToObject 使用 | 1023 |
+| 情况                                                    | 单批实例数 |
+| ------------------------------------------------------- | ---------- |
+| 默认（ObjectToWorld + WorldToObject + 多属性 Props）    | 371        |
+| 优化 Props 布局后                                       | 408        |
+| 仅矩阵 + `assumeuniformscaling`，仍用 WorldToObject     | 584        |
+| 矩阵 + `assumeuniformscaling` + 去掉 WorldToObject 使用 | 1023       |
 
 单批实例数由 **64KB 常量缓冲区** 与 **每实例数据大小**（矩阵 + Props）共同决定；通过合并属性、调整顺序、减少冗余矩阵，可以显著提高单批可画实例数。
 
