@@ -5,6 +5,7 @@ categories: [Unity, Graphics]
 tags: [gpu-instancing, drawmeshinstanced, srp-batcher]
 description: 探究 Unity GPU Instancing 下单批最多能绘制多少个实例，以及常量缓冲区、矩阵与 Per-Instance 属性对批次上限的影响。
 media_subpath: /assets/img/2026-02-13-DrawMeshInstanced/
+image: PreviewImg.png
 render_with_liquid: false
 ---
 
